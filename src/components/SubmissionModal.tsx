@@ -222,14 +222,14 @@ export const SubmissionModal: React.FC<Props> = ({
                         }
                       }}
                       placeholder="adicionar.outro@adventista.edu.br"
-                      className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                      className="flex-1 px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-base sm:text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium min-h-[42px]"
                     />
                     <button
                       type="button"
                       onClick={handleAddEmail}
-                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
+                      className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shrink-0 min-h-[42px]"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4" />
                       <span>Adicionar</span>
                     </button>
                   </div>
@@ -244,7 +244,7 @@ export const SubmissionModal: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors min-h-[44px]"
                 >
                   Cancelar
                 </button>
@@ -252,7 +252,7 @@ export const SubmissionModal: React.FC<Props> = ({
                   type="button"
                   disabled={recipients.length === 0}
                   onClick={() => onConfirmSubmit(recipients)}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 min-h-[44px]"
                 >
                   <Mail className="w-4 h-4" />
                   <span>Confirmar e Enviar ({recipients.length})</span>

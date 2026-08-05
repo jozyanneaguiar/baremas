@@ -29,29 +29,29 @@ export const Header: React.FC<Props> = ({ user, onAuthChange }) => {
 
   return (
     <header className="bg-slate-900 text-white shadow-md border-b border-slate-800">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm flex items-center justify-center">
-            <FileCheck className="w-6 h-6" />
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex flex-row items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm flex items-center justify-center shrink-0">
+            <FileCheck className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-bold text-lg text-slate-100 tracking-tight">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <h1 className="font-bold text-sm sm:text-lg text-slate-100 tracking-tight leading-snug truncate">
                 Barema de Correção – TCC
               </h1>
-              <span className="bg-blue-900/80 text-blue-200 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-700">
+              <span className="hidden sm:inline-block bg-blue-900/80 text-blue-200 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-700">
                 Relato de Experiência
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-[10px] sm:text-xs text-slate-400 truncate">
               UNIAENE • Núcleo de Pós-Graduação (NPGUniaene)
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           {user ? (
-            <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-1.5">
+            <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-2.5 py-1.5">
               <div className="flex items-center gap-2 text-xs">
                 {user.photoURL ? (
                   <img
@@ -76,7 +76,7 @@ export const Header: React.FC<Props> = ({ user, onAuthChange }) => {
               <button
                 onClick={handleLogout}
                 title="Sair da conta"
-                className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors"
+                className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-700 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -84,10 +84,11 @@ export const Header: React.FC<Props> = ({ user, onAuthChange }) => {
           ) : (
             <button
               onClick={handleLogin}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs px-3.5 py-2 rounded-lg shadow-sm transition-all border border-blue-500/30 active:scale-[0.98]"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs px-3 py-2 rounded-xl shadow-sm transition-all border border-blue-500/30 active:scale-[0.98] min-h-[38px]"
             >
-              <LogIn className="w-4 h-4" />
-              <span>Conectar Google</span>
+              <LogIn className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline sm:inline">Conectar Google</span>
+              <span className="inline xs:hidden sm:hidden">Entrar</span>
             </button>
           )}
         </div>
