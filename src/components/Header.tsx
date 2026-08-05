@@ -28,7 +28,7 @@ export const Header: React.FC<Props> = ({ user, onAuthChange }) => {
   };
 
   return (
-    <header className="bg-slate-900 text-white shadow-md border-b border-slate-800 sticky top-0 z-30">
+    <header className="bg-slate-900 text-white shadow-md border-b border-slate-800">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg text-white shadow-sm flex items-center justify-center">

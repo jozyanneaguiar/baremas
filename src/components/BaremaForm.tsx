@@ -4,8 +4,6 @@ import {
   Send,
   Download,
   GraduationCap,
-  UserCheck,
-  Calendar,
   Sparkles,
   RotateCcw,
   CheckCircle,
@@ -31,8 +29,6 @@ export const BaremaForm: React.FC<Props> = ({
   totalScore,
   onDownloadPDF,
   onSubmit,
-  userConnected,
-  onConnectGoogle,
 }) => {
   const handleInputChange = (field: keyof BaremaData, value: any) => {
     onChangeData({ ...data, [field]: value });
@@ -68,34 +64,6 @@ export const BaremaForm: React.FC<Props> = ({
     if (score >= 5.0) return 'text-amber-700 bg-amber-50 border-amber-300';
     return 'text-rose-700 bg-rose-50 border-rose-300';
   };
-
-  const blocks = [
-    {
-      title: '1. Formação Acadêmica (Itens 1 e 2)',
-      subtitle: 'Trajetória inicial e pós-graduações • Cronologia e relevância profissional',
-      items: EVALUATION_ITEMS.filter((i) => i.block === 'formacao_academica'),
-    },
-    {
-      title: '2. Trajetória Profissional (Itens 3 ao 5)',
-      subtitle: 'Descrição da carreira, cronologia dos fatos e impacto do processo formativo',
-      items: EVALUATION_ITEMS.filter((i) => i.block === 'trajetoria_profissional'),
-    },
-    {
-      title: '3. Considerações Reflexivas (Item 6)',
-      subtitle: 'Definição e alinhamento dos planos futuros',
-      items: EVALUATION_ITEMS.filter((i) => i.block === 'consideracoes_reflexivas'),
-    },
-    {
-      title: '4. Normas da ABNT (Itens 7 ao 9)',
-      subtitle: 'Estrutura do documento, formatação dos títulos e citação de autores',
-      items: EVALUATION_ITEMS.filter((i) => i.block === 'normas_abnt'),
-    },
-    {
-      title: '5. Linguagem Acadêmica (Itens 10 ao 12)',
-      subtitle: 'Conexão entre parágrafos, registro acadêmico e normas ortográficas',
-      items: EVALUATION_ITEMS.filter((i) => i.block === 'linguagem_academica'),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -140,8 +108,8 @@ export const BaremaForm: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Inputs Grid with Sleek theme layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        {/* Inputs Grid containing only Nome do Curso and Nome do Aluno */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 tracking-wider flex items-center gap-1.5">
               <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
@@ -166,32 +134,6 @@ export const BaremaForm: React.FC<Props> = ({
               value={data.academico}
               onChange={(e) => handleInputChange('academico', e.target.value)}
               placeholder="Ex: Maria Silva Santos"
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 tracking-wider flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>Parecerista</span>
-            </label>
-            <input
-              type="text"
-              value={data.parecerista}
-              onChange={(e) => handleInputChange('parecerista', e.target.value)}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 tracking-wider flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>Data da Avaliação</span>
-            </label>
-            <input
-              type="text"
-              value={data.data}
-              onChange={(e) => handleInputChange('data', e.target.value)}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all font-medium"
             />
           </div>
@@ -235,98 +177,82 @@ export const BaremaForm: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Evaluation Block Sections with Sleek Interface Style */}
-      <div className="space-y-6">
-        {blocks.map((block, bIdx) => (
-          <div
-            key={bIdx}
-            className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden"
-          >
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm tracking-tight text-slate-100">{block.title}</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">{block.subtitle}</p>
+      {/* Evaluation Items List - Pure item cards without category banners */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-4 sm:p-5 space-y-3">
+        {EVALUATION_ITEMS.map((item) => {
+          const currentSelection = data.selections[item.id];
+
+          return (
+            <div
+              key={item.id}
+              className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-4 ${
+                currentSelection
+                  ? 'bg-slate-50/90 border-slate-300 shadow-sm'
+                  : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex-1 max-w-2xl">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] font-bold text-blue-600 tracking-wider">
+                    ITEM {item.id}
+                  </span>
+                  {item.options.A.score > 1.0 && (
+                    <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                      Peso Especial ({item.options.A.score.toString().replace('.', ',')} pts)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm font-medium text-slate-800 leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+
+              {/* Compact Option Buttons (A, B, C) */}
+              <div className="flex items-center gap-2 shrink-0">
+                {(['A', 'B', 'C'] as OptionKey[]).map((optKey) => {
+                  const opt = item.options[optKey];
+                  const isSelected = currentSelection === optKey;
+
+                  let buttonStyle = '';
+                  if (isSelected) {
+                    if (optKey === 'A')
+                      buttonStyle = 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300';
+                    else if (optKey === 'B')
+                      buttonStyle = 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-300';
+                    else
+                      buttonStyle = 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300';
+                  } else {
+                    buttonStyle =
+                      'bg-white border-slate-300 text-slate-700 hover:bg-blue-600 hover:text-white hover:border-blue-600';
+                  }
+
+                  return (
+                    <button
+                      key={optKey}
+                      type="button"
+                      onClick={() => handleSelectOption(item.id, optKey)}
+                      title={`${optKey}: ${opt.label} (${opt.score.toString().replace('.', ',')} pt)`}
+                      className={`flex flex-col items-center justify-center min-w-[70px] sm:min-w-[85px] py-2 px-2.5 rounded-xl border text-xs font-bold transition-all active:scale-95 ${buttonStyle}`}
+                    >
+                      <span className="text-sm leading-none">{optKey}</span>
+                      <span
+                        className={`text-[9px] mt-1 font-semibold ${
+                          isSelected ? 'opacity-95' : 'text-slate-500 group-hover:text-white'
+                        }`}
+                      >
+                        {opt.score.toString().replace('.', ',')} pt
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-
-            <div className="p-4 sm:p-5 space-y-3">
-              {block.items.map((item) => {
-                const currentSelection = data.selections[item.id];
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-4 ${
-                      currentSelection
-                        ? 'bg-slate-50/90 border-slate-300 shadow-sm'
-                        : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex-1 max-w-2xl">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] font-bold text-blue-600 tracking-wider">
-                          ITEM {item.id}
-                        </span>
-                        {item.options.A.score > 1.0 && (
-                          <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            Peso Especial ({item.options.A.score.toString().replace('.', ',')} pts)
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs sm:text-sm font-medium text-slate-800 leading-relaxed">
-                        {item.description}
-                      </p>
-                    </div>
-
-                    {/* Compact Option Buttons (A, B, C) matching the Sleek design theme */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {(['A', 'B', 'C'] as OptionKey[]).map((optKey) => {
-                        const opt = item.options[optKey];
-                        const isSelected = currentSelection === optKey;
-
-                        let buttonStyle = '';
-                        if (isSelected) {
-                          if (optKey === 'A')
-                            buttonStyle = 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300';
-                          else if (optKey === 'B')
-                            buttonStyle = 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-300';
-                          else
-                            buttonStyle = 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300';
-                        } else {
-                          buttonStyle =
-                            'bg-white border-slate-300 text-slate-700 hover:bg-blue-600 hover:text-white hover:border-blue-600';
-                        }
-
-                        return (
-                          <button
-                            key={optKey}
-                            type="button"
-                            onClick={() => handleSelectOption(item.id, optKey)}
-                            title={`${optKey}: ${opt.label} (${opt.score.toString().replace('.', ',')} pt)`}
-                            className={`flex flex-col items-center justify-center min-w-[70px] sm:min-w-[85px] py-2 px-2.5 rounded-xl border text-xs font-bold transition-all active:scale-95 ${buttonStyle}`}
-                          >
-                            <span className="text-sm leading-none">{optKey}</span>
-                            <span
-                              className={`text-[9px] mt-1 font-semibold ${
-                                isSelected ? 'opacity-95' : 'text-slate-500 group-hover:text-white'
-                              }`}
-                            >
-                              {opt.score.toString().replace('.', ',')} pt
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Bottom Footer Action Controls matching Sleek Theme */}
-      <footer className="p-5 sm:p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 sticky bottom-4 z-20">
+      {/* Bottom Footer Action Controls - Normal scrolling flow (not fixed/sticky) */}
+      <footer className="p-5 sm:p-6 bg-slate-50 rounded-2xl border border-slate-200 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="bg-white px-5 py-2.5 rounded-xl border border-slate-300 shadow-sm">
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
