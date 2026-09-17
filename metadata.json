@@ -1,6 +1,6 @@
 {
-  "name": "Avaliação de TCC - Relato de Experiência",
-  "description": "Sistema de avaliação de Trabalhos de Conclusão de Curso (Relato de Experiência) com cálculo automático de nota, geração de PDF, envio por e-mail e salvamento no Google Drive.",
+  "name": "Baremas J",
+  "description": "Sistema Baremas J de avaliação de Trabalhos de Conclusão de Curso (Relato de Experiência) com cálculo automático de nota, geração de PDF e envio por e-mail.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

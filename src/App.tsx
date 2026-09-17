@@ -9,6 +9,7 @@ import { BaremaData, OptionKey } from './types';
 import { EVALUATION_ITEMS } from './data/evaluationItems';
 import { initAuth, googleSignIn, getAccessToken, setAccessToken } from './lib/firebase';
 import { generateBaremaPDF } from './lib/pdfGenerator';
+import { submitBarema } from './lib/submissionClient';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -146,32 +147,21 @@ export default function App() {
 
     try {
       setSubmissionStatus('submitting');
-      setCurrentStep(1); // Action A: PDF Generation
+      setCurrentStep(1); // Action 1: PDF Generation
 
       // 1. Generate PDF
-      const { pdfBase64 } = await generateBaremaPDF(templateRef.current);
+      const { pdfBase64, pdfBlob } = await generateBaremaPDF(templateRef.current);
 
-      setCurrentStep(2); // Action B & C: Send email and save to Drive
+      setCurrentStep(2); // Action 2 & 3: Send email to coord.pos@adventista.edu.br and jozyanne.aguiar@gmail.com, and save to Drive
 
-      const response = await fetch('/api/submit-barema', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokenToUse}`,
-        },
-        body: JSON.stringify({
-          data,
-          pdfBase64,
-          filename: `Barema_TCC_${data.academico.replace(/\s+/g, '_')}.pdf`,
-          recipients,
-        }),
+      await submitBarema({
+        data,
+        totalScore,
+        pdfBase64,
+        pdfBlob,
+        recipients,
+        accessToken: tokenToUse,
       });
-
-      const resData = await response.json();
-
-      if (!response.ok || !resData.success) {
-        throw new Error(resData.error || resData.details || 'Erro ao enviar avaliação.');
-      }
 
       setCurrentStep(3);
       setSubmissionStatus('success');

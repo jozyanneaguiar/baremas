@@ -22,7 +22,7 @@ async function startServer() {
       }
 
       const accessToken = authHeader.substring(7);
-      const { data, pdfBase64, filename, recipients } = req.body;
+      const { data, pdfBase64, filename, recipients, totalScore } = req.body;
 
       if (!data || !pdfBase64) {
         return res.status(400).json({ error: 'Dados da avaliação ou PDF ausentes.' });
@@ -32,14 +32,25 @@ async function startServer() {
       const programaName = data.programa || 'Pós-Graduação';
       const pdfFilename = filename || `Barema_TCC_${academicoName.replace(/\s+/g, '_')}.pdf`;
 
-      // Process recipient email list
-      let emailList: string[] = ['coord.pos@adventista.edu.br', 'coordenador.pos@adventista.edu.br'];
+      // Process recipient email list (Default: coord.pos@adventista.edu.br and jozyanne.aguiar@gmail.com)
+      let emailList: string[] = ['coord.pos@adventista.edu.br', 'jozyanne.aguiar@gmail.com'];
       if (Array.isArray(recipients) && recipients.length > 0) {
         emailList = recipients.map((e: string) => String(e).trim()).filter((e: string) => e.length > 0);
       }
+      if (emailList.length === 0) {
+        emailList = ['coord.pos@adventista.edu.br', 'jozyanne.aguiar@gmail.com'];
+      }
 
-      const toEmail = emailList[0] || 'coord.pos@adventista.edu.br';
-      const ccEmails = emailList.slice(1);
+      // Calculate final result (Aprovado >= 7.0, Reprovado < 7.0)
+      let numericScore = typeof totalScore === 'number' ? totalScore : 0;
+      if (!numericScore && data.selections) {
+        const scoreValues: Record<string, number> = { A: 1.0, B: 0.8, C: 0.5, D: 0.2, E: 0.0 };
+        const sum = (Object.values(data.selections) as string[]).reduce((acc: number, val: string) => {
+          return acc + (scoreValues[val] || 0);
+        }, 0);
+        numericScore = Math.round(((sum as number) / 12) * 100) / 10;
+      }
+      const resultadoFinal = numericScore >= 7.0 ? 'Aprovado' : 'Reprovado';
 
       // 1. Google Drive: Find or Create Folder "Correção TCCs"
       let folderId = '';
@@ -138,37 +149,43 @@ async function startServer() {
       const uploadedFileData = (await uploadRes.json()) as { id: string };
 
       // 3. Gmail API: Send Email with PDF Attachment
-      const emailSubject = `Barema de Correção TCC - ${academicoName} - ${programaName}`;
+      // Nome do email: Barema - Y (onde Y = Nome do aluno)
+      const emailSubject = `Barema - ${academicoName}`;
+
+      const emailBodyPlain = `Olá,
+Segue o trabalho corrigido.
+Curso: ${programaName}
+Nome do aluno(a): ${academicoName}
+O resultado final é: ${resultadoFinal}
+
+Qualquer dúvida, estou à disposição.
+
+Ma. Jozy Anne Miranda Aguiar Castro`;
+
       const emailBodyHtml = `
-        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-          <h2 style="color: #0F3966;">Barema de Avaliação de TCC - Relato de Experiência</h2>
-          <p>Prezada Coordenação,</p>
-          <p>Segue em anexo a avaliação do Trabalho de Conclusão de Curso (Memorial Reflexivo / Relato de Experiência).</p>
-          <table style="border-collapse: collapse; margin: 15px 0; width: 100%; max-width: 500px;">
-            <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #ddd;">Programa/Curso:</td><td style="padding: 6px; border-bottom: 1px solid #ddd;">${programaName}</td></tr>
-            <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #ddd;">Acadêmico(a):</td><td style="padding: 6px; border-bottom: 1px solid #ddd;">${academicoName}</td></tr>
-            <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #ddd;">Parecerista:</td><td style="padding: 6px; border-bottom: 1px solid #ddd;">${data.parecerista || 'Jozy Anne Miranda Aguiar Castro'}</td></tr>
-            <tr><td style="padding: 6px; font-weight: bold; border-bottom: 1px solid #ddd;">Data:</td><td style="padding: 6px; border-bottom: 1px solid #ddd;">${data.data || new Date().toLocaleDateString('pt-BR')}</td></tr>
-          </table>
-          <p>O arquivo PDF contendo a ficha de avaliação detalhada com a nota final também foi salvo no Google Drive na pasta <strong>Correção TCCs</strong>.</p>
-          <br>
-          <p>Atenciosamente,<br><strong>${data.parecerista || 'Jozy Anne Miranda Aguiar Castro'}</strong></p>
+        <div style="font-family: Arial, Helvetica, sans-serif; color: #1e293b; line-height: 1.6; font-size: 14px;">
+          <p style="margin: 0 0 12px 0;">Olá,</p>
+          <p style="margin: 0 0 12px 0;">Segue o trabalho corrigido.</p>
+          <p style="margin: 0 0 12px 0;">
+            Curso: ${programaName}<br>
+            Nome do aluno(a): ${academicoName}<br>
+            O resultado final é: <strong>${resultadoFinal}</strong>
+          </p>
+          <p style="margin: 0 0 16px 0;">Qualquer dúvida, estou à disposição.</p>
+          <p style="margin: 0; font-weight: bold; color: #0f172a;">Ma. Jozy Anne Miranda Aguiar Castro</p>
         </div>
       `;
 
-      // Build MIME Message
+      // Build MIME Message with all recipients in To
       const mimeBoundary = '----=_Part_' + Date.now();
-      let rawMime = `To: ${toEmail}\r\n`;
-      if (ccEmails.length > 0) {
-        rawMime += `Cc: ${ccEmails.join(', ')}\r\n`;
-      }
+      let rawMime = `To: ${emailList.join(', ')}\r\n`;
       rawMime += `Subject: =?UTF-8?B?${Buffer.from(emailSubject).toString('base64')}?=\r\n`;
       rawMime += `MIME-Version: 1.0\r\n`;
       rawMime += `Content-Type: multipart/mixed; boundary="${mimeBoundary}"\r\n\r\n`;
 
       rawMime += `--${mimeBoundary}\r\n`;
-      rawMime += `Content-Type: text/html; charset=UTF-8\r\n\r\n`;
-      rawMime += `${emailBodyHtml}\r\n\r\n`;
+      rawMime += `Content-Type: text/plain; charset=UTF-8\r\n\r\n`;
+      rawMime += `${emailBodyPlain}\r\n\r\n`;
 
       rawMime += `--${mimeBoundary}\r\n`;
       rawMime += `Content-Type: application/pdf; name="${pdfFilename}"\r\n`;
@@ -209,8 +226,8 @@ async function startServer() {
         emailSent: true,
         driveSaved: true,
         driveFileId: uploadedFileData.id,
-        toEmail,
-        ccEmails,
+        recipients: emailList,
+        subject: emailSubject,
         folderName: 'Correção TCCs',
       });
     } catch (err: any) {

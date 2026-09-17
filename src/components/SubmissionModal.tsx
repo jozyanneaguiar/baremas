@@ -41,10 +41,13 @@ export const SubmissionModal: React.FC<Props> = ({
 }) => {
   const [recipients, setRecipients] = useState<string[]>([
     'coord.pos@adventista.edu.br',
-    'coordenador.pos@adventista.edu.br',
+    'jozyanne.aguiar@gmail.com',
   ]);
   const [newEmail, setNewEmail] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
+
+  const resultadoFinal = totalScore >= 7.0 ? 'Aprovado' : 'Reprovado';
+  const emailSubject = `Barema - ${data.academico || 'Nome do Aluno'}`;
 
   // Reset emails state on open if default
   useEffect(() => {
@@ -91,7 +94,7 @@ export const SubmissionModal: React.FC<Props> = ({
   const steps = [
     { title: 'Gerar arquivo PDF no modelo oficial Barema', icon: FileText },
     {
-      title: `Enviar e-mail para ${recipients.length} destinatário(s)`,
+      title: `Enviar e-mail para ${recipients.join(' e ')}`,
       icon: Mail,
     },
     { title: 'Salvar arquivo PDF na pasta "Correção TCCs" do Google Drive', icon: HardDrive },
@@ -236,6 +239,38 @@ export const SubmissionModal: React.FC<Props> = ({
                   {emailError && (
                     <p className="text-[11px] font-semibold text-rose-600 mt-1">{emailError}</p>
                   )}
+                </div>
+              </div>
+
+              {/* Email Content Preview */}
+              <div className="border border-slate-200 bg-slate-50/80 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Prévia do E-mail</span>
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      resultadoFinal === 'Aprovado'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-rose-100 text-rose-800 border border-rose-300'
+                    }`}
+                  >
+                    Resultado: {resultadoFinal}
+                  </span>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 font-mono text-[11px] leading-relaxed text-slate-700 whitespace-pre-line shadow-inner">
+{`Assunto: ${emailSubject}
+
+Olá,
+Segue o trabalho corrigido.
+Curso: ${data.programa || 'Nome do Curso'}
+Nome do aluno(a): ${data.academico || 'Nome do Aluno'}
+O resultado final é: ${resultadoFinal}
+
+Qualquer dúvida, estou à disposição.
+
+Ma. Jozy Anne Miranda Aguiar Castro`}
                 </div>
               </div>
 
