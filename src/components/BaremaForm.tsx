@@ -5,6 +5,7 @@ import {
   GraduationCap,
   BookOpen,
   FilePlus,
+  Loader2,
 } from 'lucide-react';
 import { BaremaData, OptionKey } from '../types';
 import { EVALUATION_ITEMS } from '../data/evaluationItems';
@@ -17,6 +18,7 @@ interface Props {
   onSubmit: () => void;
   userConnected: boolean;
   onConnectGoogle: () => void;
+  isSending?: boolean;
 }
 
 export const BaremaForm: React.FC<Props> = ({
@@ -25,6 +27,7 @@ export const BaremaForm: React.FC<Props> = ({
   totalScore,
   onDownloadPDF,
   onSubmit,
+  isSending = false,
 }) => {
   const handleInputChange = (field: keyof BaremaData, value: any) => {
     onChangeData({ ...data, [field]: value });
@@ -203,10 +206,20 @@ export const BaremaForm: React.FC<Props> = ({
           <button
             type="button"
             onClick={onSubmit}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all text-xs sm:text-sm min-h-[48px]"
+            disabled={isSending}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all text-xs sm:text-sm min-h-[48px]"
           >
-            <Send className="w-4 h-4" />
-            <span>Finalizar e Enviar</span>
+            {isSending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Gerando e Abrindo Gmail...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Finalizar e Enviar</span>
+              </>
+            )}
           </button>
         </div>
       </footer>

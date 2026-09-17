@@ -19,6 +19,7 @@ import { User } from 'firebase/auth';
 import { BaremaData } from '../types';
 import { googleSignIn } from '../lib/firebase';
 import { submitBarema } from '../lib/submissionClient';
+import { uploadBaremaPDF } from '../lib/supabase';
 
 interface PreviewTabProps {
   data: BaremaData;
@@ -128,50 +129,31 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
     setSendState('sending');
     setErrorMessage('');
 
-    // Check if we have Google access token for background Gmail API delivery
-    let token = accessToken;
-    if (!token) {
+    try {
+      // 1. Download PDF automatically for the user to attach
+      onDownloadPDF();
+
+      // 2. Upload to Supabase Storage
       try {
-        const res = await googleSignIn();
-        if (res?.accessToken) {
-          token = res.accessToken;
-          onAuthChange(res.user, res.accessToken);
-        } else {
-          // User closed popup or cancelled
-          setSendState('auth_required');
-          return;
-        }
-      } catch (authErr: any) {
-        console.warn('Erro ao conectar Google para envio em 2º plano:', authErr);
-        // If on Vercel and unauthorized domain, or popup blocked:
+        await uploadBaremaPDF(pdfBlob, academicoName);
+      } catch (supaErr) {
+        console.warn('Supabase storage upload background notice:', supaErr);
+      }
+
+      // 3. Open Gmail compose window with prefilled recipients, subject and body
+      const opened = window.open(gmailComposeUrl, '_blank');
+      if (!opened) {
+        // In case popup was blocked by browser
         setSendState('auth_required');
-        if (authErr?.code === 'auth/unauthorized-domain') {
-          setErrorMessage(
-            'O domínio do Vercel precisa ser autorizado no Firebase para envio direto em 2º plano. Use o botão "Abrir no Gmail Web" ou autorize o domínio no Firebase Console.'
-          );
-        } else {
-          setErrorMessage(authErr.message || 'Não foi possível conectar a conta Google para envio automático.');
-        }
+        setErrorMessage('O navegador bloqueou a abertura da janela. Clique no botão abaixo para abrir o Gmail.');
         return;
       }
-    }
-
-    // Try direct submission (Gmail API + Drive)
-    try {
-      await submitBarema({
-        data,
-        totalScore,
-        pdfBase64,
-        pdfBlob,
-        recipients,
-        accessToken: token,
-      });
 
       setSendState('success');
     } catch (sendErr: any) {
-      console.error('Falha no envio via API:', sendErr);
+      console.error('Falha ao abrir Gmail:', sendErr);
       setSendState('error');
-      setErrorMessage(sendErr.message || 'Falha ao enviar via Gmail API.');
+      setErrorMessage(sendErr.message || 'Falha ao abrir a aba do Gmail.');
     }
   };
 
@@ -393,27 +375,30 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
               <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 text-emerald-950 space-y-3 animate-in fade-in">
                 <div className="flex items-center gap-2 font-bold text-sm text-emerald-900">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>Arquivo Enviado com Sucesso!</span>
+                  <span>Aba do Gmail Aberta com Sucesso!</span>
                 </div>
                 <p className="text-xs text-emerald-800 leading-relaxed">
-                  O arquivo PDF do Barema de <strong>{academicoName}</strong> foi enviado por e-mail para{' '}
-                  <strong>{recipients.join(', ')}</strong> e salvo na pasta <strong>Correção TCCs</strong>.
+                  O arquivo PDF do Barema de <strong>{academicoName}</strong> foi baixado no seu dispositivo e a tela do Gmail foi aberta com destinatários, assunto e mensagem preenchidos.
                 </p>
-                <div className="flex gap-2 pt-1">
+                <div className="bg-white/80 border border-emerald-200 rounded-lg p-2.5 text-[11px] text-emerald-900">
+                  <strong>Próximo passo:</strong> Na aba do Gmail, clique no ícone de <strong>clipe (anexo)</strong> para incluir o PDF baixado e depois clique no botão azul <strong>Enviar</strong> do Gmail!
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <a
+                    href={gmailComposeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Reabrir Gmail</span>
+                  </a>
                   <button
                     type="button"
                     onClick={onBackToForm}
-                    className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl transition-colors"
+                    className="px-4 py-2.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs rounded-xl transition-colors"
                   >
                     Voltar ao Formulário
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onDownloadPDF}
-                    className="px-4 py-2.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs rounded-xl transition-colors flex items-center gap-1"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Baixar PDF</span>
                   </button>
                 </div>
               </div>
@@ -429,12 +414,12 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
                   {sendState === 'sending' ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Enviando para os e-mails cadastrados...</span>
+                      <span>Baixando PDF e Abrindo Gmail...</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Enviar para os E-mails Cadastrados</span>
+                      <span>Abrir Gmail com Mensagem e Destinatários Prontos</span>
                     </>
                   )}
                 </button>

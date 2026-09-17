@@ -6,10 +6,12 @@ import { AuthBanner } from './components/AuthBanner';
 import { BaremaForm } from './components/BaremaForm';
 import { BaremaPDFTemplate } from './components/BaremaPDFTemplate';
 import { PreviewTab } from './components/PreviewTab';
+import { GmailSentModal } from './components/GmailSentModal';
 import { BaremaData, OptionKey } from './types';
 import { EVALUATION_ITEMS } from './data/evaluationItems';
 import { initAuth, googleSignIn, getAccessToken, setAccessToken } from './lib/firebase';
 import { generateBaremaPDF } from './lib/pdfGenerator';
+import { uploadBaremaPDF } from './lib/supabase';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -23,6 +25,14 @@ export default function App() {
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
+
+  // Gmail Direct Send Modal State
+  const [gmailModalOpen, setGmailModalOpen] = useState<boolean>(false);
+  const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
+  const [popupBlocked, setPopupBlocked] = useState<boolean>(false);
+  const [gmailUrl, setGmailUrl] = useState<string>('');
+  const [mailtoUrl, setMailtoUrl] = useState<string>('');
+  const [supabaseSavedUrl, setSupabaseSavedUrl] = useState<string | null>(null);
 
   // Form State
   const [data, setData] = useState<BaremaData>({
@@ -114,6 +124,96 @@ export default function App() {
     } catch (err) {
       console.error('Erro ao baixar PDF:', err);
       setValidationWarning('Não foi possível gerar o PDF para download.');
+    }
+  };
+
+  const handleFinalizarEEnviar = async () => {
+    if (!data.programa.trim() || !data.academico.trim()) {
+      setValidationWarning('Por favor, preencha o Nome do Curso e o Nome do Aluno antes de finalizar e enviar.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setValidationWarning(null);
+    setIsFinalizing(true);
+
+    const academicoName = data.academico.trim();
+    const programaName = data.programa.trim();
+    const resultadoFinal = totalScore >= 7.0 ? 'Aprovado' : 'Reprovado';
+    const emailSubject = `Barema - ${academicoName}`;
+    const emailBodyPlain = `Olá,
+Segue o trabalho corrigido.
+Curso: ${programaName}
+Nome do aluno(a): ${academicoName}
+O resultado final é: ${resultadoFinal}
+
+Qualquer dúvida, estou à disposição.
+
+Ma. Jozy Anne Miranda Aguiar Castro`;
+
+    const recipientsList = 'coord.pos@adventista.edu.br,jozyanne.aguiar@gmail.com';
+
+    const targetGmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+      recipientsList
+    )}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBodyPlain)}`;
+
+    const targetMailtoUrl = `mailto:${encodeURIComponent(recipientsList)}?subject=${encodeURIComponent(
+      emailSubject
+    )}&body=${encodeURIComponent(emailBodyPlain)}`;
+
+    setGmailUrl(targetGmailUrl);
+    setMailtoUrl(targetMailtoUrl);
+
+    // Pre-open blank tab synchronously in user click gesture to avoid browser popup blockers
+    let newTab: Window | null = null;
+    try {
+      newTab = window.open('about:blank', '_blank');
+    } catch {
+      newTab = null;
+    }
+
+    try {
+      if (templateRef.current) {
+        const { pdfBlob: blob, pdfBase64: b64 } = await generateBaremaPDF(templateRef.current);
+        setPdfBlob(blob);
+        setPdfBase64(b64);
+
+        // 1. Download the PDF file directly to the user's downloads
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `Barema_TCC_${academicoName.replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+
+        // 2. Upload to Supabase Storage 'baremas' bucket
+        try {
+          const uploadRes = await uploadBaremaPDF(blob, academicoName);
+          if (uploadRes?.publicUrl) {
+            setSupabaseSavedUrl(uploadRes.publicUrl);
+          }
+        } catch (supaErr) {
+          console.warn('Supabase storage upload fallback:', supaErr);
+        }
+
+        // 3. Open Gmail compose in the new tab
+        if (newTab && !newTab.closed) {
+          newTab.location.href = targetGmailUrl;
+          setPopupBlocked(false);
+        } else {
+          const opened = window.open(targetGmailUrl, '_blank');
+          setPopupBlocked(!opened);
+        }
+      }
+      setGmailModalOpen(true);
+    } catch (err) {
+      console.error('Erro ao gerar PDF e abrir Gmail:', err);
+      if (newTab && !newTab.closed) newTab.close();
+      setValidationWarning('Não foi possível gerar o PDF. Tente novamente.');
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -213,9 +313,10 @@ export default function App() {
             onChangeData={setData}
             totalScore={totalScore}
             onDownloadPDF={handleDownloadPDF}
-            onSubmit={handleOpenPreview}
+            onSubmit={handleFinalizarEEnviar}
             userConnected={!!accessToken}
             onConnectGoogle={handleConnectGoogle}
+            isSending={isFinalizing}
           />
         ) : (
           <PreviewTab
@@ -238,6 +339,20 @@ export default function App() {
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', overflow: 'hidden' }}>
         <BaremaPDFTemplate ref={templateRef} data={data} totalScore={totalScore} />
       </div>
+
+      {/* Direct Gmail Sent Transition Modal */}
+      <GmailSentModal
+        isOpen={gmailModalOpen}
+        onClose={() => setGmailModalOpen(false)}
+        data={data}
+        totalScore={totalScore}
+        pdfBlob={pdfBlob}
+        gmailUrl={gmailUrl}
+        mailtoUrl={mailtoUrl}
+        onDownloadPDF={handleDownloadPDF}
+        popupBlocked={popupBlocked}
+        supabaseSavedUrl={supabaseSavedUrl}
+      />
     </div>
   );
 }
