@@ -1,20 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
+import { FileEdit, Eye, AlertCircle } from 'lucide-react';
 import { Header } from './components/Header';
 import { AuthBanner } from './components/AuthBanner';
 import { BaremaForm } from './components/BaremaForm';
 import { BaremaPDFTemplate } from './components/BaremaPDFTemplate';
-import { SubmissionModal } from './components/SubmissionModal';
+import { PreviewTab } from './components/PreviewTab';
 import { BaremaData, OptionKey } from './types';
 import { EVALUATION_ITEMS } from './data/evaluationItems';
 import { initAuth, googleSignIn, getAccessToken, setAccessToken } from './lib/firebase';
 import { generateBaremaPDF } from './lib/pdfGenerator';
-import { submitBarema } from './lib/submissionClient';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setToken] = useState<string | null>(null);
   const [showAuthBanner, setShowAuthBanner] = useState<boolean>(false);
+
+  // Active View Tab: 'form' (Ficha) or 'preview' (Pré-visualização e Envio)
+  const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
   // Form State
   const [data, setData] = useState<BaremaData>({
@@ -37,14 +45,6 @@ export default function App() {
       12: 'A',
     },
   });
-
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [submissionStatus, setSubmissionStatus] = useState<
-    'confirm' | 'submitting' | 'success' | 'error'
-  >('confirm');
-  const [currentStep, setCurrentStep] = useState(1);
-  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const templateRef = useRef<HTMLDivElement>(null);
 
@@ -102,8 +102,8 @@ export default function App() {
   const handleDownloadPDF = async () => {
     if (!templateRef.current) return;
     try {
-      const { pdfBlob } = await generateBaremaPDF(templateRef.current);
-      const url = URL.createObjectURL(pdfBlob);
+      const { pdfBlob: blob } = await generateBaremaPDF(templateRef.current);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `Barema_TCC_${(data.academico || 'Aluno').replace(/\s+/g, '_')}.pdf`;
@@ -113,62 +113,40 @@ export default function App() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Erro ao baixar PDF:', err);
-      alert('Erro ao gerar arquivo PDF.');
+      setValidationWarning('Não foi possível gerar o PDF para download.');
     }
   };
 
-  const handleSubmitClick = () => {
+  const handleOpenPreview = async () => {
     if (!data.programa.trim() || !data.academico.trim()) {
-      alert('Por favor, preencha o Nome do Curso e o Nome do Aluno antes de enviar.');
+      setValidationWarning('Por favor, preencha o Nome do Curso e o Nome do Aluno antes de avançar.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    if (!accessToken) {
-      setShowAuthBanner(true);
-      handleConnectGoogle();
-      return;
-    }
+    setValidationWarning(null);
+    setActiveTab('preview');
+    setIsGeneratingPdf(true);
 
-    setSubmissionStatus('confirm');
-    setCurrentStep(1);
-    setErrorMessage('');
-    setModalOpen(true);
-  };
-
-  const handleConfirmSubmit = async (recipients: string[]) => {
-    if (!templateRef.current) return;
-
-    const tokenToUse = accessToken || getAccessToken();
-    if (!tokenToUse) {
-      setSubmissionStatus('error');
-      setErrorMessage('Token de acesso Google não encontrado. Faça login novamente.');
-      return;
+    if (pdfBlobUrl) {
+      URL.revokeObjectURL(pdfBlobUrl);
+      setPdfBlobUrl(null);
     }
 
     try {
-      setSubmissionStatus('submitting');
-      setCurrentStep(1); // Action 1: PDF Generation
-
-      // 1. Generate PDF
-      const { pdfBase64, pdfBlob } = await generateBaremaPDF(templateRef.current);
-
-      setCurrentStep(2); // Action 2 & 3: Send email to coord.pos@adventista.edu.br and jozyanne.aguiar@gmail.com, and save to Drive
-
-      await submitBarema({
-        data,
-        totalScore,
-        pdfBase64,
-        pdfBlob,
-        recipients,
-        accessToken: tokenToUse,
-      });
-
-      setCurrentStep(3);
-      setSubmissionStatus('success');
-    } catch (err: any) {
-      console.error('Erro no envio:', err);
-      setSubmissionStatus('error');
-      setErrorMessage(err.message || 'Ocorreu um erro ao comunicar com os serviços do Google.');
+      if (templateRef.current) {
+        const { pdfBlob: blob, pdfBase64: b64 } = await generateBaremaPDF(templateRef.current);
+        const url = URL.createObjectURL(blob);
+        setPdfBlob(blob);
+        setPdfBase64(b64);
+        setPdfBlobUrl(url);
+      }
+    } catch (err) {
+      console.error('Erro ao gerar prévia do PDF:', err);
+      setValidationWarning('Erro ao processar visualização do PDF. Tente novamente.');
+    } finally {
+      setIsGeneratingPdf(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -176,37 +154,90 @@ export default function App() {
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
       <Header user={user} onAuthChange={handleAuthChange} />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
         {showAuthBanner && !user && <AuthBanner onLogin={handleConnectGoogle} />}
 
-        <BaremaForm
-          data={data}
-          onChangeData={setData}
-          totalScore={totalScore}
-          onDownloadPDF={handleDownloadPDF}
-          onSubmit={handleSubmitClick}
-          userConnected={!!accessToken}
-          onConnectGoogle={handleConnectGoogle}
-        />
+        {/* Validation Warning Alert */}
+        {validationWarning && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-between gap-3 shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{validationWarning}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setValidationWarning(null)}
+              className="text-amber-800 hover:text-amber-950 font-bold text-xs underline"
+            >
+              Entendido
+            </button>
+          </div>
+        )}
+
+        {/* Top Tab Switcher */}
+        <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('form')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px] ${
+              activeTab === 'form'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <FileEdit className="w-4 h-4" />
+            <span>Ficha de Avaliação</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenPreview}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px] ${
+              activeTab === 'preview'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Eye className="w-4 h-4" />
+            <span>Pré-visualização e Envio</span>
+            {pdfBlobUrl && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+            )}
+          </button>
+        </div>
+
+        {/* Active Tab View */}
+        {activeTab === 'form' ? (
+          <BaremaForm
+            data={data}
+            onChangeData={setData}
+            totalScore={totalScore}
+            onDownloadPDF={handleDownloadPDF}
+            onSubmit={handleOpenPreview}
+            userConnected={!!accessToken}
+            onConnectGoogle={handleConnectGoogle}
+          />
+        ) : (
+          <PreviewTab
+            data={data}
+            totalScore={totalScore}
+            pdfBlobUrl={pdfBlobUrl}
+            pdfBlob={pdfBlob}
+            pdfBase64={pdfBase64}
+            isGeneratingPdf={isGeneratingPdf}
+            onBackToForm={() => setActiveTab('form')}
+            onDownloadPDF={handleDownloadPDF}
+            user={user}
+            accessToken={accessToken}
+            onAuthChange={handleAuthChange}
+          />
+        )}
       </main>
 
-      {/* Hidden PDF Template Container for Off-Screen Rendering */}
+      {/* Hidden PDF Template Container for Off-Screen High-Res Rendering */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', overflow: 'hidden' }}>
         <BaremaPDFTemplate ref={templateRef} data={data} totalScore={totalScore} />
       </div>
-
-      <SubmissionModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        data={data}
-        totalScore={totalScore}
-        status={submissionStatus}
-        currentStep={currentStep}
-        errorMessage={errorMessage}
-        onConfirmSubmit={handleConfirmSubmit}
-        onDownloadPDF={handleDownloadPDF}
-        userEmail={user?.email}
-      />
     </div>
   );
 }
