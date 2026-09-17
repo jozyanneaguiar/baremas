@@ -1,38 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User } from 'firebase/auth';
-import { FileEdit, Eye, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Header } from './components/Header';
-import { AuthBanner } from './components/AuthBanner';
 import { BaremaForm } from './components/BaremaForm';
 import { BaremaPDFTemplate } from './components/BaremaPDFTemplate';
-import { PreviewTab } from './components/PreviewTab';
 import { GmailSentModal } from './components/GmailSentModal';
 import { BaremaData, OptionKey } from './types';
 import { EVALUATION_ITEMS } from './data/evaluationItems';
-import { initAuth, googleSignIn, getAccessToken, setAccessToken } from './lib/firebase';
 import { generateBaremaPDF } from './lib/pdfGenerator';
 import { uploadBaremaPDF } from './lib/supabase';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setToken] = useState<string | null>(null);
-  const [showAuthBanner, setShowAuthBanner] = useState<boolean>(false);
-
-  // Active View Tab: 'form' (Ficha) or 'preview' (Pré-visualização e Envio)
-  const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form');
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
-  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
-  // Gmail Direct Send Modal State
+  // Sent Modal State
   const [gmailModalOpen, setGmailModalOpen] = useState<boolean>(false);
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
   const [popupBlocked, setPopupBlocked] = useState<boolean>(false);
   const [gmailUrl, setGmailUrl] = useState<string>('');
   const [mailtoUrl, setMailtoUrl] = useState<string>('');
   const [supabaseSavedUrl, setSupabaseSavedUrl] = useState<string | null>(null);
+  const [emailSentDirectly, setEmailSentDirectly] = useState<boolean>(false);
 
   // Form State
   const [data, setData] = useState<BaremaData>({
@@ -59,18 +47,6 @@ export default function App() {
   const templateRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    initAuth(
-      (authUser, token) => {
-        setUser(authUser);
-        setToken(token);
-        setShowAuthBanner(false);
-      },
-      () => {
-        setUser(null);
-        setToken(null);
-      }
-    );
-
     // Clear any obsolete custom image overrides from localStorage
     localStorage.removeItem('customLogoUrl');
     localStorage.removeItem('customSignatureUrl');
@@ -89,25 +65,6 @@ export default function App() {
   };
 
   const totalScore = calculateTotalScore();
-
-  const handleAuthChange = (newUser: User | null, newToken: string | null) => {
-    setUser(newUser);
-    setToken(newToken);
-    if (newToken) setShowAuthBanner(false);
-  };
-
-  const handleConnectGoogle = async () => {
-    try {
-      const res = await googleSignIn();
-      if (res) {
-        setUser(res.user);
-        setToken(res.accessToken);
-        setShowAuthBanner(false);
-      }
-    } catch (err: any) {
-      console.error('Falha ao autenticar:', err);
-    }
-  };
 
   const handleDownloadPDF = async () => {
     if (!templateRef.current) return;
@@ -136,11 +93,13 @@ export default function App() {
 
     setValidationWarning(null);
     setIsFinalizing(true);
+    setEmailSentDirectly(false);
 
     const academicoName = data.academico.trim();
     const programaName = data.programa.trim();
     const resultadoFinal = totalScore >= 7.0 ? 'Aprovado' : 'Reprovado';
     const emailSubject = `Barema - ${academicoName}`;
+    const filename = `Barema_TCC_${academicoName.replace(/\s+/g, '_')}.pdf`;
     const emailBodyPlain = `Olá,
 Segue o trabalho corrigido.
 Curso: ${programaName}
@@ -164,31 +123,12 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
     setGmailUrl(targetGmailUrl);
     setMailtoUrl(targetMailtoUrl);
 
-    // Pre-open blank tab synchronously in user click gesture to avoid browser popup blockers
-    let newTab: Window | null = null;
-    try {
-      newTab = window.open('about:blank', '_blank');
-    } catch {
-      newTab = null;
-    }
-
     try {
       if (templateRef.current) {
         const { pdfBlob: blob, pdfBase64: b64 } = await generateBaremaPDF(templateRef.current);
         setPdfBlob(blob);
-        setPdfBase64(b64);
 
-        // 1. Download the PDF file directly to the user's downloads
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `Barema_TCC_${academicoName.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(downloadUrl);
-
-        // 2. Upload to Supabase Storage 'baremas' bucket
+        // 1. Upload to Supabase Storage 'baremas' bucket
         try {
           const uploadRes = await uploadBaremaPDF(blob, academicoName);
           if (uploadRes?.publicUrl) {
@@ -198,65 +138,60 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
           console.warn('Supabase storage upload fallback:', supaErr);
         }
 
-        // 3. Open Gmail compose in the new tab
-        if (newTab && !newTab.closed) {
-          newTab.location.href = targetGmailUrl;
-          setPopupBlocked(false);
-        } else {
+        // 2. Attempt direct background email dispatch via backend SMTP with attached PDF
+        let sentDirect = false;
+        try {
+          const directSendRes = await fetch('/api/send-email-direct', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              data,
+              pdfBase64: b64,
+              filename,
+              totalScore,
+            }),
+          });
+
+          if (directSendRes.ok) {
+            const sendJson = await directSendRes.json();
+            if (sendJson.success) {
+              sentDirect = true;
+              setEmailSentDirectly(true);
+            }
+          }
+        } catch (dispatchErr) {
+          console.warn('Direct SMTP dispatch fallback:', dispatchErr);
+        }
+
+        // 3. If direct SMTP failed or is inactive, fallback to downloading PDF and opening Gmail
+        if (!sentDirect) {
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(downloadUrl);
+
           const opened = window.open(targetGmailUrl, '_blank');
           setPopupBlocked(!opened);
         }
       }
       setGmailModalOpen(true);
     } catch (err) {
-      console.error('Erro ao gerar PDF e abrir Gmail:', err);
-      if (newTab && !newTab.closed) newTab.close();
+      console.error('Erro ao gerar PDF e processar envio:', err);
       setValidationWarning('Não foi possível gerar o PDF. Tente novamente.');
     } finally {
       setIsFinalizing(false);
     }
   };
 
-  const handleOpenPreview = async () => {
-    if (!data.programa.trim() || !data.academico.trim()) {
-      setValidationWarning('Por favor, preencha o Nome do Curso e o Nome do Aluno antes de avançar.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    setValidationWarning(null);
-    setActiveTab('preview');
-    setIsGeneratingPdf(true);
-
-    if (pdfBlobUrl) {
-      URL.revokeObjectURL(pdfBlobUrl);
-      setPdfBlobUrl(null);
-    }
-
-    try {
-      if (templateRef.current) {
-        const { pdfBlob: blob, pdfBase64: b64 } = await generateBaremaPDF(templateRef.current);
-        const url = URL.createObjectURL(blob);
-        setPdfBlob(blob);
-        setPdfBase64(b64);
-        setPdfBlobUrl(url);
-      }
-    } catch (err) {
-      console.error('Erro ao gerar prévia do PDF:', err);
-      setValidationWarning('Erro ao processar visualização do PDF. Tente novamente.');
-    } finally {
-      setIsGeneratingPdf(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
-      <Header user={user} onAuthChange={handleAuthChange} />
+      <Header />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
-        {showAuthBanner && !user && <AuthBanner onLogin={handleConnectGoogle} />}
-
         {/* Validation Warning Alert */}
         {validationWarning && (
           <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-between gap-3 shadow-sm animate-in fade-in">
@@ -274,65 +209,15 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
           </div>
         )}
 
-        {/* Top Tab Switcher */}
-        <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('form')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px] ${
-              activeTab === 'form'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileEdit className="w-4 h-4" />
-            <span>Ficha de Avaliação</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleOpenPreview}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px] ${
-              activeTab === 'preview'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Eye className="w-4 h-4" />
-            <span>Pré-visualização e Envio</span>
-            {pdfBlobUrl && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-            )}
-          </button>
-        </div>
-
-        {/* Active Tab View */}
-        {activeTab === 'form' ? (
-          <BaremaForm
-            data={data}
-            onChangeData={setData}
-            totalScore={totalScore}
-            onDownloadPDF={handleDownloadPDF}
-            onSubmit={handleFinalizarEEnviar}
-            userConnected={!!accessToken}
-            onConnectGoogle={handleConnectGoogle}
-            isSending={isFinalizing}
-          />
-        ) : (
-          <PreviewTab
-            data={data}
-            totalScore={totalScore}
-            pdfBlobUrl={pdfBlobUrl}
-            pdfBlob={pdfBlob}
-            pdfBase64={pdfBase64}
-            isGeneratingPdf={isGeneratingPdf}
-            onBackToForm={() => setActiveTab('form')}
-            onDownloadPDF={handleDownloadPDF}
-            user={user}
-            accessToken={accessToken}
-            onAuthChange={handleAuthChange}
-          />
-        )}
+        {/* Evaluation Form Screen */}
+        <BaremaForm
+          data={data}
+          onChangeData={setData}
+          totalScore={totalScore}
+          onDownloadPDF={handleDownloadPDF}
+          onSubmit={handleFinalizarEEnviar}
+          isSending={isFinalizing}
+        />
       </main>
 
       {/* Hidden PDF Template Container for Off-Screen High-Res Rendering */}
@@ -340,7 +225,7 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
         <BaremaPDFTemplate ref={templateRef} data={data} totalScore={totalScore} />
       </div>
 
-      {/* Direct Gmail Sent Transition Modal */}
+      {/* Confirmation & Dispatch Modal */}
       <GmailSentModal
         isOpen={gmailModalOpen}
         onClose={() => setGmailModalOpen(false)}
@@ -352,6 +237,7 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
         onDownloadPDF={handleDownloadPDF}
         popupBlocked={popupBlocked}
         supabaseSavedUrl={supabaseSavedUrl}
+        emailSentDirectly={emailSentDirectly}
       />
     </div>
   );

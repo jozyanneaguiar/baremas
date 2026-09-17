@@ -16,8 +16,8 @@ interface Props {
   totalScore: number;
   onDownloadPDF: () => void;
   onSubmit: () => void;
-  userConnected: boolean;
-  onConnectGoogle: () => void;
+  userConnected?: boolean;
+  onConnectGoogle?: () => void;
   isSending?: boolean;
 }
 
@@ -212,7 +212,7 @@ export const BaremaForm: React.FC<Props> = ({
             {isSending ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Gerando e Abrindo Gmail...</span>
+                <span>Enviando e Salvando PDF...</span>
               </>
             ) : (
               <>

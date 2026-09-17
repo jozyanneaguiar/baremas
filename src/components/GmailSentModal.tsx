@@ -25,6 +25,7 @@ interface GmailSentModalProps {
   onDownloadPDF: () => void;
   popupBlocked?: boolean;
   supabaseSavedUrl?: string | null;
+  emailSentDirectly?: boolean;
 }
 
 export const GmailSentModal: React.FC<GmailSentModalProps> = ({
@@ -38,6 +39,7 @@ export const GmailSentModal: React.FC<GmailSentModalProps> = ({
   onDownloadPDF,
   popupBlocked = false,
   supabaseSavedUrl,
+  emailSentDirectly = false,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -100,12 +102,16 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
         {/* Header */}
         <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-600 rounded-xl text-white">
+            <div className={`p-2 rounded-xl text-white ${emailSentDirectly ? 'bg-emerald-600' : 'bg-blue-600'}`}>
               <Mail className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-sm sm:text-base text-white">
-                {popupBlocked ? 'Pronto para Enviar no Gmail' : 'Aba do Gmail Aberta!'}
+                {emailSentDirectly
+                  ? 'E-mail Enviado com Sucesso!'
+                  : popupBlocked
+                  ? 'Pronto para Enviar no Gmail'
+                  : 'Aba do Gmail Aberta com Mensagem Pronta!'}
               </h3>
               <p className="text-[11px] text-slate-300">
                 Barema de <strong>{academicoName}</strong> ({resultadoFinal})
@@ -127,34 +133,55 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-emerald-900 space-y-1.5">
             <div className="flex items-center gap-2 font-bold text-emerald-950">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>PDF gerado e baixado automaticamente</span>
+              <span>
+                {emailSentDirectly
+                  ? 'E-mail enviado e PDF salvo com sucesso!'
+                  : 'PDF gerado e baixado automaticamente'}
+              </span>
             </div>
             <p className="text-emerald-800 leading-relaxed text-[11px]">
-              O arquivo <strong>{filename}</strong> foi salvo nos seus Downloads para anexar no Gmail.
+              {emailSentDirectly
+                ? `O documento ${filename} foi enviado diretamente para coord.pos@adventista.edu.br e jozyanne.aguiar@gmail.com.`
+                : `O arquivo ${filename} foi salvo nos seus Downloads para você anexar ao e-mail no Gmail.`}
             </p>
             {supabaseSavedUrl && (
               <div className="pt-1 text-[11px] text-emerald-900 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>Salvo com sucesso no seu <strong>Supabase Storage (bucket baremas)</strong>!</span>
+                <span>Salvo e protegido no <strong>Supabase Storage (bucket baremas)</strong>!</span>
               </div>
             )}
           </div>
 
-          {/* Quick instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-blue-950 space-y-2">
-            <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
-              <Paperclip className="w-4 h-4 text-blue-600" />
-              <span>Como enviar em 2 passos simples:</span>
+          {/* Quick instructions (only if manual Gmail was needed) */}
+          {!emailSentDirectly && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-blue-950 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+                <Paperclip className="w-4 h-4 text-blue-600" />
+                <span>Como enviar em 2 passos simples:</span>
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-blue-900/90 leading-relaxed">
+                <li>
+                  Na aba do Gmail aberta, clique no ícone de <strong>clipe (anexar)</strong> e escolha o PDF baixado (ou apenas arraste o arquivo para o e-mail).
+                </li>
+                <li>
+                  Os destinatários, o assunto e o texto já estão 100% preenchidos. Basta clicar no botão <strong>Enviar</strong> do Gmail!
+                </li>
+              </ol>
             </div>
-            <ol className="list-decimal list-inside space-y-1 text-[11px] text-blue-900/90 leading-relaxed">
-              <li>
-                Na aba do Gmail aberta, clique no ícone de <strong>clipe (anexar)</strong> e escolha o PDF baixado (ou apenas arraste o arquivo para o e-mail).
-              </li>
-              <li>
-                Os destinatários, o assunto e o texto já estão 100% preenchidos. Basta clicar no botão <strong>Enviar</strong> do Gmail!
-              </li>
-            </ol>
-          </div>
+          )}
+
+          {/* Direct Success Message */}
+          {emailSentDirectly && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 text-emerald-950 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-emerald-900">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>Envio Concluído com Sucesso</span>
+              </div>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                A mensagem foi enviada diretamente da sua conta <strong>jozyanne.aguiar@gmail.com</strong> com o PDF oficial anexado. Não é necessário abrir o Gmail nem baixar arquivos.
+              </p>
+            </div>
+          )}
 
           {/* Summary Box */}
           <div className="border border-slate-200 rounded-xl p-3.5 space-y-2 bg-slate-50">
@@ -184,19 +211,21 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
 
           {/* Buttons */}
           <div className="space-y-2 pt-1">
-            {/* Direct Gmail Open Button */}
-            <a
-              href={gmailUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all text-xs min-h-[44px]"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Abrir / Reabrir Gmail na Nova Aba</span>
-            </a>
+            {/* Direct Gmail Open Button (only if not sent directly) */}
+            {!emailSentDirectly && (
+              <a
+                href={gmailUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all text-xs min-h-[44px]"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Abrir / Reabrir Gmail na Nova Aba</span>
+              </a>
+            )}
 
             {/* Mobile Native Share with Attachment */}
-            {canShareFiles && (
+            {!emailSentDirectly && canShareFiles && (
               <button
                 type="button"
                 onClick={handleMobileShare}

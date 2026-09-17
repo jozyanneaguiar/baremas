@@ -13,6 +13,101 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // API Route: Send Email via SMTP directly with PDF attachment
+  app.post('/api/send-email-direct', async (req, res) => {
+    try {
+      const { data, pdfBase64, filename, totalScore } = req.body;
+
+      if (!data || !pdfBase64) {
+        return res.status(400).json({ error: 'Dados da avaliação ou PDF ausentes.' });
+      }
+
+      const academicoName = (data.academico || 'Aluno').trim();
+      const programaName = (data.programa || 'Pós-Graduação').trim();
+      const pdfFilename = filename || `Barema_TCC_${academicoName.replace(/\s+/g, '_')}.pdf`;
+      const resultadoFinal = (typeof totalScore === 'number' ? totalScore : 0) >= 7.0 ? 'Aprovado' : 'Reprovado';
+
+      const emailSubject = `Barema - ${academicoName}`;
+      const emailList = ['coord.pos@adventista.edu.br', 'jozyanne.aguiar@gmail.com'];
+
+      const emailBodyPlain = `Olá,\nSegue o trabalho corrigido.\nCurso: ${programaName}\nNome do aluno(a): ${academicoName}\nO resultado final é: ${resultadoFinal}\n\nQualquer dúvida, estou à disposição.\n\nMa. Jozy Anne Miranda Aguiar Castro`;
+
+      const emailBodyHtml = `
+        <div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6; font-size: 14px;">
+          <p>Olá,</p>
+          <p>Segue o trabalho corrigido.</p>
+          <p style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px; margin: 16px 0; border-radius: 4px;">
+            <strong>Curso:</strong> ${programaName}<br>
+            <strong>Nome do aluno(a):</strong> ${academicoName}<br>
+            <strong>O resultado final é:</strong> <strong>${resultadoFinal}</strong>
+          </p>
+          <p>Qualquer dúvida, estou à disposição.</p>
+          <br>
+          <p><strong>Ma. Jozy Anne Miranda Aguiar Castro</strong></p>
+        </div>
+      `;
+
+      // Gmail App Password provided by user
+      const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || 'jozyanne.aguiar@gmail.com';
+      const smtpPass = (
+        process.env.SMTP_PASS ||
+        process.env.GMAIL_PASS ||
+        process.env.GMAIL_APP_PASSWORD ||
+        'knvo ofix cccu qdrl'
+      ).replace(/\s+/g, '');
+
+      if (smtpPass) {
+        const nodemailer = await import('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
+          port: Number(process.env.SMTP_PORT || 465),
+          secure: Number(process.env.SMTP_PORT || 465) === 465,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+
+        const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+
+        await transporter.sendMail({
+          from: `"Ma. Jozy Anne Miranda Aguiar Castro" <${smtpUser}>`,
+          to: emailList.join(', '),
+          subject: emailSubject,
+          text: emailBodyPlain,
+          html: emailBodyHtml,
+          attachments: [
+            {
+              filename: pdfFilename,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            },
+          ],
+        });
+
+        return res.json({
+          success: true,
+          method: 'smtp_direct',
+          recipients: emailList,
+          subject: emailSubject,
+          message: 'E-mail enviado automaticamente com sucesso via SMTP!',
+        });
+      }
+
+      // If SMTP_PASS is not configured on the container, inform the client
+      return res.json({
+        success: false,
+        needSmtpConfig: true,
+        emailSubject,
+        recipients: emailList,
+        emailBodyPlain,
+      });
+    } catch (err: any) {
+      console.error('Erro ao enviar e-mail direto:', err);
+      return res.status(500).json({ error: 'Erro ao enviar e-mail', details: err.message });
+    }
+  });
+
   // API Route: Send Email via Gmail & Save PDF to Google Drive
   app.post('/api/submit-barema', async (req, res) => {
     try {
