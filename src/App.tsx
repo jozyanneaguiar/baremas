@@ -138,8 +138,10 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
           console.warn('Supabase storage upload fallback:', supaErr);
         }
 
-        // 2. Attempt direct background email dispatch via backend SMTP with attached PDF
+        // 2. Direct background email dispatch via backend SMTP with attached PDF
         let sentDirect = false;
+        let errorMessage = '';
+
         try {
           const directSendRes = await fetch('/api/send-email-direct', {
             method: 'POST',
@@ -152,34 +154,27 @@ Ma. Jozy Anne Miranda Aguiar Castro`;
             }),
           });
 
-          if (directSendRes.ok) {
-            const sendJson = await directSendRes.json();
-            if (sendJson.success) {
-              sentDirect = true;
-              setEmailSentDirectly(true);
-            }
+          const sendJson = await directSendRes.json().catch(() => null);
+
+          if (directSendRes.ok && sendJson?.success) {
+            sentDirect = true;
+            setEmailSentDirectly(true);
+          } else {
+            errorMessage = sendJson?.error || sendJson?.details || 'Serviço de e-mail indisponível no momento.';
           }
-        } catch (dispatchErr) {
-          console.warn('Direct SMTP dispatch fallback:', dispatchErr);
+        } catch (dispatchErr: any) {
+          console.error('Direct SMTP dispatch error:', dispatchErr);
+          errorMessage = dispatchErr?.message || 'Falha de conexão com o servidor de e-mail.';
         }
 
-        // 3. If direct SMTP failed or is inactive, fallback to downloading PDF and opening Gmail
         if (!sentDirect) {
-          const downloadUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = downloadUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(downloadUrl);
-
-          const opened = window.open(targetGmailUrl, '_blank');
-          setPopupBlocked(!opened);
+          setValidationWarning(`Não foi possível enviar o e-mail diretamente: ${errorMessage}`);
+          setIsFinalizing(false);
+          return;
         }
       }
       setGmailModalOpen(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao gerar PDF e processar envio:', err);
       setValidationWarning('Não foi possível gerar o PDF. Tente novamente.');
     } finally {
